@@ -1,91 +1,17 @@
 // Paints "The Drowned Keep": a black gothic castle on a crag, backlit by a pale moon through torn
 // clouds, strangled and split open by wet, slow tentacles. No outlines: shapes are silhouettes,
 // lit only along the edges that face the moon, over painted noise (clouds, moon, fog, grime).
-// The still parts are painted once per resize into offscreen layers; the tentacles, fog, lights,
-// ash, grain and the rare lightning are painted every frame.
+// The noise textures are baked into images at build time (src/scripts/scene-textures.ts) and only
+// loaded here; the still parts are painted once per resize into offscreen layers; the tentacles,
+// fog, lights, ash, grain and the rare lightning are painted every frame.
+
+import { between, clamp, css, fbm, H, hash, MOON, mixRgb, moonSight, noise, rand, type Rgb, seed, smooth, W } from "./scene-noise";
+import type { TextureName } from "./scene-textures";
 
 type P = [number, number];
 type Ctx = CanvasRenderingContext2D;
-type Rgb = [number, number, number];
-
-const W = 1600;
-const H = 1000;
-const MOON = { x: 920, y: 285, r: 178 };
-
-// ---------------------------------------------------------------- randomness and noise
-
-const createRandom = (seed: number) => {
-	let state = seed;
-
-	return () => {
-		state = (state + 0x6d2b79f5) | 0;
-		let t = Math.imul(state ^ (state >>> 15), 1 | state);
-
-		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-	};
-};
-
-let rand = createRandom(1);
-const seed = (value: number) => (rand = createRandom(value));
-const between = (a: number, b: number) => a + rand() * (b - a);
-
-const hash = (x: number, y: number) => {
-	let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + 1013904223) | 0;
-
-	h = Math.imul(h ^ (h >>> 13), 1274126177);
-	return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-};
-
-/** Value noise; with a period it tiles, for textures that repeat */
-const noise = (x: number, y: number, period = 0) => {
-	const xi = Math.floor(x);
-	const yi = Math.floor(y);
-	const u = (x - xi) ** 2 * (3 - 2 * (x - xi));
-	const v = (y - yi) ** 2 * (3 - 2 * (y - yi));
-	const wrap = (n: number) => (period ? ((n % period) + period) % period : n);
-	const a = hash(wrap(xi), wrap(yi));
-	const b = hash(wrap(xi + 1), wrap(yi));
-	const c = hash(wrap(xi), wrap(yi + 1));
-	const d = hash(wrap(xi + 1), wrap(yi + 1));
-
-	return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-};
-
-const fbm = (x: number, y: number, octaves = 5, period = 0) => {
-	let sum = 0;
-	let weight = 0.5;
-	let total = 0;
-
-	for (let i = 0; i < octaves; i++) {
-		const scale = 2 ** i;
-
-		sum += noise(x * scale, y * scale, period * scale) * weight;
-		total += weight;
-		weight *= 0.5;
-	}
-	return sum / total;
-};
-
-/** Noise pushed around by noise: the swirled, smoky look of the clouds and fog */
-const warped = (x: number, y: number, period = 0) => {
-	const qx = fbm(x, y, 4, period);
-	const qy = fbm(x + 5.2, y + 1.3, 4, period);
-
-	return fbm(x + 1.9 * qx, y + 1.9 * qy, 5, period);
-};
-
-const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
-const smooth = (edge0: number, edge1: number, value: number) => {
-	const t = clamp((value - edge0) / (edge1 - edge0));
-
-	return t * t * (3 - 2 * t);
-};
-const mixRgb = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-const css = ([r, g, b]: Rgb, alpha = 1) => `rgba(${r | 0},${g | 0},${b | 0},${alpha})`;
-
-/** How much a point sees of the moon: 1 on it, falling off with distance */
-const moonSight = (x: number, y: number, reach = 420) => Math.exp(-Math.max(0, Math.hypot(x - MOON.x, y - MOON.y) - MOON.r) / reach);
+/** A baked texture (src/assets/scene/*.webp) */
+type Texture = HTMLImageElement;
 
 // ---------------------------------------------------------------- shapes
 
@@ -146,145 +72,6 @@ const layer = (width: number, height: number) => {
 	canvas.width = width;
 	canvas.height = height;
 	return canvas;
-};
-
-const paintPixels = (width: number, height: number, pixel: (u: number, v: number) => [number, number, number, number]) => {
-	const canvas = layer(width, height);
-	const c = canvas.getContext("2d")!;
-	const image = c.createImageData(width, height);
-
-	for (let v = 0; v < height; v++) {
-		for (let u = 0; u < width; u++) {
-			const [r, g, b, a] = pixel(u, v);
-			const i = (v * width + u) * 4;
-
-			image.data[i] = r;
-			image.data[i + 1] = g;
-			image.data[i + 2] = b;
-			image.data[i + 3] = a;
-		}
-	}
-	c.putImageData(image, 0, 0);
-	return canvas;
-};
-
-// ---------------------------------------------------------------- textures, painted once
-
-/** Torn clouds over the whole sky, opening around the moon and silvered where they face it */
-const paintClouds = () => {
-	const cw = 560;
-	const ch = 350;
-	const density = new Float32Array(cw * ch);
-
-	for (let v = 0; v < ch; v++) {
-		for (let u = 0; u < cw; u++) {
-			const x = (u / cw) * W;
-			const y = (v / ch) * H;
-			const swirl = warped(x * 0.0031, y * 0.0072);
-			const hole = Math.exp(-((Math.hypot(x - MOON.x, (y - MOON.y) * 1.2) / (MOON.r * 2.1)) ** 2));
-			const threshold = 0.4 + 0.2 * smooth(40, 560, y) - 0.14 * smooth(600, 780, y) + 0.26 * hole;
-
-			density[v * cw + u] = smooth(threshold, threshold + 0.2, swirl);
-		}
-	}
-	const at = (u: number, v: number) => density[clamp(Math.round(v), 0, ch - 1) * cw + clamp(Math.round(u), 0, cw - 1)];
-	const dark: Rgb = [9, 10, 9];
-	const mid: Rgb = [43, 43, 35];
-	const silver: Rgb = [222, 216, 188];
-	const glow: Rgb = [140, 138, 114];
-
-	return paintPixels(cw, ch, (u, v) => {
-		const d = at(u, v);
-
-		if (d <= 0.001) {
-			return [0, 0, 0, 0];
-		}
-		const x = (u / cw) * W;
-		const y = (v / ch) * H;
-		const dx = MOON.x - x;
-		const dy = MOON.y - y;
-		const len = Math.hypot(dx, dy) || 1;
-		const lu = ((dx / len) * cw) / W;
-		const lv = ((dy / len) * ch) / H;
-		const edge = clamp((d - at(u + lu * 3, v + lv * 3)) * 2.4);
-		const shadow = at(u + lu * 9, v + lv * 9);
-		const sight = moonSight(x, y, 260);
-		let color = mixRgb(dark, mid, (0.15 + 0.6 * sight) * (1 - shadow * 0.6));
-
-		color = mixRgb(color, glow, (1 - d) * sight * 0.5);
-		color = mixRgb(color, silver, clamp(edge * sight ** 0.7 * 1.1));
-		return [color[0], color[1], color[2], 255 * clamp(d * 1.15)];
-	});
-};
-
-/** The moon's face: seas, speckled craters and a darker limb */
-const paintMoonFace = () => {
-	const size = 256;
-	const light: Rgb = [232, 226, 204];
-	const sea: Rgb = [138, 134, 114];
-
-	return paintPixels(size, size, (u, v) => {
-		const x = (u - size / 2) / (size / 2);
-		const y = (v - size / 2) / (size / 2);
-		const r = Math.hypot(x, y);
-
-		if (r > 1) {
-			return [0, 0, 0, 0];
-		}
-		const seas = smooth(0.46, 0.62, fbm(u * 0.016 + 3, v * 0.016 + 7, 5));
-		const pits = noise(u * 0.16, v * 0.16) * 0.5 + noise(u * 0.4, v * 0.4) * 0.5;
-		const limb = 0.5 + 0.5 * Math.sqrt(1 - r * r) ** 0.6;
-		let color = mixRgb(light, sea, seas * 0.75);
-
-		color = mixRgb(color, sea, smooth(0.62, 0.9, pits) * 0.35);
-		color = color.map((value) => value * limb) as Rgb;
-		return [color[0], color[1], color[2], 255 * clamp((1 - r) * size * 0.5)];
-	});
-};
-
-/** A strip of fog that tiles horizontally */
-const paintFog = (seedValue: number) => {
-	const fw = 512;
-	const fh = 128;
-	const period = 4;
-
-	return paintPixels(fw, fh, (u, v) => {
-		const value = warped((u / fw) * period + seedValue, (v / fh) * 1.4 + seedValue, period);
-		const band = Math.sin((v / fh) * Math.PI) ** 1.6;
-
-		return [150, 152, 134, 255 * smooth(0.36, 0.78, value) * band];
-	});
-};
-
-/** Grime for stone and earth: pale specks and dark stains, tiling */
-const paintGrime = () => {
-	const size = 256;
-
-	return paintPixels(size, size, (u, v) => {
-		const stain = fbm(u / 32, v / 32, 4, 8);
-		const speck = hash(u, v);
-
-		if (speck > 0.93) {
-			return [140, 136, 112, 30 + speck * 40];
-		}
-		return stain < 0.5 ? [0, 0, 0, (0.5 - stain) * 300] : [120, 118, 96, (stain - 0.5) * 70];
-	});
-};
-
-/** Blotches that knock holes in the moonlit rims */
-const paintBreakup = () => {
-	const size = 256;
-
-	return paintPixels(size, size, (u, v) => [0, 0, 0, 255 * smooth(0.48, 0.66, fbm(u / 20, v / 20, 4, 12.8))]);
-};
-
-const paintGrain = (seedValue: number) => {
-	seed(seedValue);
-	return paintPixels(192, 192, () => {
-		const value = rand() < 0.5 ? 0 : 255;
-
-		return [value, value, value, rand() * 26];
-	});
 };
 
 // ---------------------------------------------------------------- the castle, as geometry
@@ -532,7 +319,7 @@ const rim = (
 	scene: () => void,
 	passes: { width: number; color: string; alpha: number; blur: number }[],
 	scale: number,
-	breakup: HTMLCanvasElement,
+	breakup: Texture,
 ) => {
 	const scratch = layer(shape.width, shape.height);
 	const s = scratch.getContext("2d")!;
@@ -583,7 +370,7 @@ const rim = (
 	scene();
 };
 
-const grime = (target: Ctx, texture: HTMLCanvasElement, alpha: number) => {
+const grime = (target: Ctx, texture: Texture, alpha: number) => {
 	target.save();
 	target.setTransform(1, 0, 0, 1, 0, 0);
 	target.globalCompositeOperation = "source-atop";
@@ -600,7 +387,7 @@ const behind = (shape: P[]) => {
 	return clamp(1.6 - nearest / MOON.r);
 };
 
-const paintWorld = (c: Ctx, scene: () => void, scale: number, grimeTexture: HTMLCanvasElement, breakup: HTMLCanvasElement) => {
+const paintWorld = (c: Ctx, scene: () => void, scale: number, grimeTexture: Texture, breakup: Texture) => {
 	// Silhouette
 	c.fillStyle = STONE;
 	for (const shape of CASTLE.shapes) {
@@ -832,7 +619,7 @@ const paintWorld = (c: Ctx, scene: () => void, scale: number, grimeTexture: HTML
 
 // ---------------------------------------------------------------- sky
 
-const paintSky = (c: Ctx, clouds: HTMLCanvasElement, face: HTMLCanvasElement) => {
+const paintSky = (c: Ctx, clouds: Texture, face: Texture) => {
 	const sky = c.createLinearGradient(0, -100, 0, H);
 
 	sky.addColorStop(0, "#030304");
@@ -934,7 +721,7 @@ const twig = (c: Ctx, x: number, y: number, angle: number, length: number, width
 	}
 };
 
-const paintFore = (c: Ctx, scene: () => void, scale: number, grimeTexture: HTMLCanvasElement, breakup: HTMLCanvasElement) => {
+const paintFore = (c: Ctx, scene: () => void, scale: number, grimeTexture: Texture, breakup: Texture) => {
 	const black = "#060606";
 
 	seed(701);
@@ -1398,15 +1185,45 @@ const FOG_BANDS = [
 	{ y: 970, h: 200, speed: 7, alpha: 0.32, scale: 2.4, texture: 0 },
 ];
 
-export const mountEldritchCastle = (canvas: HTMLCanvasElement) => {
+/** The baked textures' addresses, by name (hashed file names, so cached for good) */
+export const TEXTURE_URLS = Object.fromEntries(
+	Object.entries(import.meta.glob("../assets/scene/*.webp", { eager: true, query: "?url", import: "default" })).map(([path, url]) => [
+		path.match(/([\w-]+)\.webp$/)![1],
+		url as string,
+	]),
+) as Record<TextureName, string>;
+
+const loadTexture = (url: string) =>
+	new Promise<Texture>((resolve, reject) => {
+		const image = new Image();
+
+		image.decoding = "async";
+		// Decoded off the main thread before first use, so drawing it never stalls a frame
+		image.onload = () => image.decode().then(() => resolve(image), () => resolve(image));
+		image.onerror = () => reject(new Error(`Could not load ${url}`));
+		image.src = url;
+	});
+
+const loadTextures = async () =>
+	Object.fromEntries(
+		await Promise.all(Object.entries(TEXTURE_URLS).map(async ([name, url]) => [name, await loadTexture(url)] as const)),
+	) as Record<TextureName, Texture>;
+
+/** Paints the scene into the canvas once its textures are in; the canvas gets `data-ready` then */
+export const mountEldritchCastle = async (canvas: HTMLCanvasElement) => {
+	// Marks for the browser's performance tools: scene-start, scene-textures, scene-ready
+	performance.mark("scene-start");
+	const textures = await loadTextures();
+
+	performance.mark("scene-textures");
 	const c = canvas.getContext("2d")!;
 	const still = window.matchMedia("(prefers-reduced-motion: reduce)");
-	const clouds = paintClouds();
-	const moonFace = paintMoonFace();
-	const fogs = [paintFog(3), paintFog(11)];
-	const grimeTexture = paintGrime();
-	const breakup = paintBreakup();
-	const grains = [paintGrain(1), paintGrain(2), paintGrain(3)].map((grain) => c.createPattern(grain, "repeat")!);
+	const clouds = textures.clouds;
+	const moonFace = textures.moon;
+	const fogs = [textures["fog-a"], textures["fog-b"]];
+	const grimeTexture = textures.grime;
+	const breakup = textures.breakup;
+	const grains = [textures["grain-a"], textures["grain-b"], textures["grain-c"]].map((grain) => c.createPattern(grain, "repeat")!);
 	const ash: Ash[] = [];
 	let layers: Record<"sky" | "world" | "fore" | "post", HTMLCanvasElement> | null = null;
 	let scale = 1;
@@ -1635,6 +1452,10 @@ export const mountEldritchCastle = (canvas: HTMLCanvasElement) => {
 		c.setTransform(1, 0, 0, 1, (t * 997) % 192, (t * 613) % 192);
 		c.fillRect(-192, -192, canvas.width + 192, canvas.height + 192);
 		screen();
+		if (!("ready" in canvas.dataset)) {
+			canvas.dataset.ready = "";
+			performance.mark("scene-ready");
+		}
 	};
 
 	const loop = (now: number) => {

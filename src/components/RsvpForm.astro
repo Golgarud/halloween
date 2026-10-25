@@ -397,6 +397,36 @@ const films = [
 		letter-spacing: 0.01em;
 	}
 
+	/* The summons glows, as if read by candlelight; the light breathes */
+	h1 {
+		position: relative;
+		isolation: isolate;
+		color: #efe4c4;
+		text-shadow:
+			0 0 12px rgba(236, 190, 110, 0.45),
+			0 0 30px rgba(205, 150, 70, 0.25);
+		animation: candlelight 5s ease-in-out infinite;
+	}
+
+	/* Kept inside the panel's padding, so it never makes the panel scroll sideways */
+	h1::before {
+		content: "";
+		position: absolute;
+		z-index: -1;
+		inset: -14px -16px -16px -16px;
+		background: radial-gradient(ellipse 60% 70% at 38% 55%, rgba(205, 160, 80, 0.26), rgba(205, 160, 80, 0.07) 55%, transparent 75%);
+		filter: blur(4px);
+		pointer-events: none;
+	}
+
+	@keyframes candlelight {
+		50% {
+			text-shadow:
+				0 0 16px rgba(242, 202, 124, 0.6),
+				0 0 40px rgba(205, 150, 70, 0.34);
+		}
+	}
+
 	.lede {
 		margin: 0 0 24px;
 		color: #b9b29a;
@@ -771,6 +801,7 @@ const films = [
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		h1,
 		.pumpkin .face {
 			animation: none;
 		}

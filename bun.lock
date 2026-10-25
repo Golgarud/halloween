@@ -8,6 +8,9 @@
         "@astrojs/node": "^11.1.9",
         "astro": "^7.4.2",
       },
+      "devDependencies": {
+        "sharp": "^0.35.5",
+      },
     },
   },
   "packages": {
