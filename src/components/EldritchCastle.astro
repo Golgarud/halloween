@@ -1,0 +1,32 @@
+---
+// The full-screen illustration; everything is painted by src/scripts/eldritch-castle.ts
+---
+
+<figure class="eldritch">
+	<canvas
+		id="eldritch-castle"
+		role="img"
+		aria-label="A black gothic castle on a crag, backlit by a pale moon through torn clouds, its towers strangled and split open by wet, slow-moving tentacles"
+	></canvas>
+</figure>
+
+<script>
+	import { mountEldritchCastle } from "../scripts/eldritch-castle";
+
+	mountEldritchCastle(document.getElementById("eldritch-castle") as HTMLCanvasElement);
+</script>
+
+<style>
+	.eldritch {
+		position: fixed;
+		inset: 0;
+		margin: 0;
+		background: #040404;
+	}
+
+	canvas {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+</style>

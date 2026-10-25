@@ -1,0 +1,33 @@
+---
+// The first, storybook version of the illustration, kept on the side at /cartoon/; painted by
+// src/scripts/cartoon-castle.ts
+---
+
+<figure class="eldritch">
+	<canvas
+		id="cartoon-castle"
+		role="img"
+		aria-label="A gothic castle on a crag under a pale green moon, its towers wrapped and burst open by writhing tentacles"
+	></canvas>
+</figure>
+
+<script>
+	import { mountCartoonCastle } from "../scripts/cartoon-castle";
+
+	mountCartoonCastle(document.getElementById("cartoon-castle") as HTMLCanvasElement);
+</script>
+
+<style>
+	.eldritch {
+		position: fixed;
+		inset: 0;
+		margin: 0;
+		background: #050606;
+	}
+
+	canvas {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+</style>
