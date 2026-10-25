@@ -1,23 +1,36 @@
 ---
-// The invitation: full name, coming or not, three films. Posts to /api/rsvp, which validates again
-// with the same rules (src/lib/rsvp.ts) and keeps the answer; works without JavaScript too.
+// The invitation: full name, coming or not, three film ideas. Posts to /api/rsvp, which validates
+// again with the same rules (src/lib/rsvp.ts) and keeps the answer; works without JavaScript too.
+// In French by default, in English on demand (src/lib/i18n.ts); once signed, it bursts into bats.
+import { DEFAULT_LANG, LANGS, TEXT, TITLES } from "../lib/i18n";
 import { LIMITS, TRAP } from "../lib/rsvp";
 
-const movies = [
-	["movie1", "First film"],
-	["movie2", "Second film"],
-	["movie3", "Third film"],
+const text = TEXT[DEFAULT_LANG];
+const films = [
+	["movie1", "film1"],
+	["movie2", "film2"],
+	["movie3", "film3"],
 ] as const;
 ---
 
+<div class="lang" role="group" aria-label={text.switchLabel} data-t-label="switchLabel">
+	{
+		LANGS.map((lang) => (
+			<button type="button" data-lang={lang} aria-pressed={String(lang === DEFAULT_LANG)} lang={lang}>
+				{lang.toUpperCase()}
+			</button>
+		))
+	}
+</div>
+
 <section class="rsvp" id="rsvp" aria-labelledby="rsvp-title">
 	<form method="post" action="/api/rsvp" novalidate>
-		<p class="kicker">All Hallows' Eve</p>
-		<h1 id="rsvp-title">You are summoned</h1>
-		<p class="lede">The keep opens its doors for one night. Tell us if you will come, and which films we should watch in the dark.</p>
+		<p class="kicker" lang="en">{TITLES.kicker}</p>
+		<h1 id="rsvp-title" lang="en">{TITLES.heading}</h1>
+		<p class="lede" data-t="lede">{text.lede}</p>
 
 		<div class="field">
-			<label for="rsvp-name">Full name</label>
+			<label for="rsvp-name" data-t="name">{text.name}</label>
 			<input
 				id="rsvp-name"
 				name="name"
@@ -32,34 +45,49 @@ const movies = [
 		</div>
 
 		<fieldset class="field" aria-describedby="present-error">
-			<legend>Will you be there?</legend>
+			<legend data-t="present">{text.present}</legend>
 			<div class="choices">
 				<label class="choice">
 					<input type="radio" name="present" value="yes" required />
-					<span>Yes, I will come</span>
+					<span data-t="yes">{text.yes}</span>
 				</label>
 				<label class="choice">
 					<input type="radio" name="present" value="no" />
-					<span>No, I cannot</span>
+					<span data-t="no">{text.no}</span>
 				</label>
 			</div>
 			<p class="error" id="present-error" hidden></p>
 		</fieldset>
 
-		<fieldset class="field">
-			<legend>Three films for the night</legend>
-			<p class="hint">Optional. Whatever should haunt the screen.</p>
+		<div class="field bring">
 			{
-				movies.map(([name, label]) => (
+				(["drink", "food"] as const).map((name) => (
+					<>
+						<label class="check">
+							<input type="checkbox" name={name} value="yes" aria-describedby={`${name}-error`} />
+							<span data-t={name}>{text[name]}</span>
+						</label>
+						<p class="error" id={`${name}-error`} hidden />
+					</>
+				))
+			}
+		</div>
+
+		<fieldset class="field">
+			<legend data-t="films">{text.films}</legend>
+			<p class="hint" data-t="filmsHint">{text.filmsHint}</p>
+			{
+				films.map(([name, key], index) => (
 					<div class="film">
-						<label class="visually-hidden" for={`rsvp-${name}`}>
-							{label}
+						<label class="visually-hidden" for={`rsvp-${name}`} data-t-film={index + 1}>
+							{text.filmLabel(index + 1)}
 						</label>
 						<input
 							id={`rsvp-${name}`}
 							name={name}
 							type="text"
-							placeholder={label}
+							placeholder={text[key]}
+							data-t-placeholder={key}
 							autocomplete="off"
 							maxlength={LIMITS.movie.max}
 							aria-describedby={`${name}-error`}
@@ -72,47 +100,95 @@ const movies = [
 
 		<!-- Left empty by people, filled by bots -->
 		<div class="trap" aria-hidden="true">
-			<label for="rsvp-trap">Leave this empty</label>
+			<label for="rsvp-trap" data-t="trap">{text.trap}</label>
 			<input id="rsvp-trap" name={TRAP} type="text" tabindex="-1" autocomplete="off" />
 		</div>
 
-		<button type="submit">Sign the register</button>
+		<button type="submit" class="submit">
+			<svg class="pumpkin" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+				<path class="stem" d="M15.2 8.6c.2-2.7 1.2-4.7 3.4-5.7l1.3 1.6c-1.6.8-2.3 2.2-2.3 4.3z"></path>
+				<ellipse class="rind" cx="16" cy="19.2" rx="13.6" ry="10.6"></ellipse>
+				<ellipse class="rib" cx="10.6" cy="19.2" rx="5.6" ry="10.2"></ellipse>
+				<ellipse class="rib" cx="21.4" cy="19.2" rx="5.6" ry="10.2"></ellipse>
+				<ellipse class="core" cx="16" cy="19.2" rx="4.8" ry="10.6"></ellipse>
+				<path
+					class="face"
+					d="M9.6 16.8 12.8 13.2 14 17.2ZM22.4 16.8 19.2 13.2 18 17.2ZM16 17.9 17.3 20.2H14.7ZM8.8 21.8Q16 24.6 23.2 21.8L21.8 25.2 20.4 23.9 19 25.9 17.6 24.4 16 26.2 14.4 24.4 13 25.9 11.6 23.9 10.2 25.2Z"
+				></path>
+			</svg>
+			<span data-t="submit">{text.submit}</span>
+		</button>
 		<p class="status" role="status" aria-live="polite"></p>
 	</form>
 
 	<div class="done" hidden tabindex="-1">
-		<p class="kicker">Your answer is kept</p>
-		<h2 class="done-title"></h2>
+		<p class="kicker" lang="en">{TITLES.doneKicker}</p>
+		<h2 class="done-title" lang="en"></h2>
 		<p class="done-text"></p>
-		<button type="button" class="again">Change my answer</button>
+		<button type="button" class="again" data-t="again">{text.again}</button>
 	</div>
 </section>
 
 <script>
+	import { DEFAULT_LANG, isLang, TEXT, TITLES, type FailureCode, type Lang } from "../lib/i18n";
 	import { FIELDS, validate, type Errors } from "../lib/rsvp";
+	import { releaseBats } from "../scripts/bats";
 
 	const section = document.querySelector<HTMLElement>("#rsvp")!;
 	const form = section.querySelector("form")!;
 	const done = section.querySelector<HTMLElement>(".done")!;
 	const status = form.querySelector<HTMLElement>(".status")!;
-	const button = form.querySelector<HTMLButtonElement>("button[type=submit]")!;
+	const submit = form.querySelector<HTMLButtonElement>(".submit")!;
+	const submitText = submit.querySelector<HTMLElement>("span")!;
+	const still = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-	const DONE = {
-		yes: ["The keep will be waiting", "Your name is in the register. Come when the moon is up."],
-		no: ["So be it", "The keep will remember you. You can still change your mind."],
-	};
+	// What is on screen, kept as codes so it can be worded again in the other language
+	let lang: Lang = DEFAULT_LANG;
+	let errors: Errors = {};
+	let failure: FailureCode | null = null;
+	let answer: boolean | null = null;
+	let sending = false;
 
-	const showErrors = (errors: Errors) => {
+	const render = () => {
+		const text = TEXT[lang];
+
+		document.documentElement.lang = lang;
+		for (const element of document.querySelectorAll<HTMLElement>("[data-t]")) {
+			element.textContent = text[element.dataset.t as keyof typeof text] as string;
+		}
+		for (const element of document.querySelectorAll<HTMLInputElement>("[data-t-placeholder]")) {
+			element.placeholder = text[element.dataset.tPlaceholder as keyof typeof text] as string;
+		}
+		for (const element of document.querySelectorAll<HTMLElement>("[data-t-label]")) {
+			element.setAttribute("aria-label", text[element.dataset.tLabel as keyof typeof text] as string);
+		}
+		for (const element of document.querySelectorAll<HTMLElement>("[data-t-film]")) {
+			element.textContent = text.filmLabel(Number(element.dataset.tFilm));
+		}
+		for (const button of document.querySelectorAll<HTMLButtonElement>("[data-lang]")) {
+			button.setAttribute("aria-pressed", String(button.dataset.lang === lang));
+		}
 		for (const field of FIELDS) {
-			const message = errors[field];
+			const code = errors[field];
 			const error = form.querySelector<HTMLElement>(`#${field}-error`)!;
 
-			error.textContent = message ?? "";
-			error.hidden = !message;
+			error.textContent = code ? text.errors[code] : "";
+			error.hidden = !code;
 			for (const input of form.querySelectorAll<HTMLInputElement>(`[name=${field}]`)) {
-				input.toggleAttribute("aria-invalid", !!message);
+				input.toggleAttribute("aria-invalid", !!code);
 			}
 		}
+		status.textContent = failure ? text.errors[failure] : "";
+		submitText.textContent = sending ? text.sending : text.submit;
+		if (answer !== null) {
+			done.querySelector(".done-title")!.textContent = answer ? TITLES.doneYes : TITLES.doneNo;
+			done.querySelector(".done-text")!.textContent = answer ? text.doneYes : text.doneNo;
+		}
+	};
+
+	const showErrors = (next: Errors) => {
+		errors = next;
+		render();
 		const first = FIELDS.find((field) => errors[field]);
 
 		if (first) {
@@ -121,30 +197,61 @@ const movies = [
 	};
 
 	const showDone = (present: boolean) => {
-		const [title, text] = DONE[present ? "yes" : "no"];
-
-		done.querySelector(".done-title")!.textContent = title;
-		done.querySelector(".done-text")!.textContent = text;
+		answer = present;
+		render();
 		form.hidden = true;
 		done.hidden = false;
-		done.focus();
+		done.focus({ preventScroll: true });
 	};
 
-	form.addEventListener("input", (event) => {
-		const input = event.target as HTMLInputElement;
-		const error = form.querySelector<HTMLElement>(`#${input.name}-error`);
+	/** The form comes apart into bats, which fly to the moon; the answer appears behind them */
+	const vanish = (present: boolean) => {
+		if (still.matches) {
+			showDone(present);
+			return;
+		}
+		const area = section.getBoundingClientRect();
 
-		if (error && !error.hidden) {
-			error.hidden = true;
-			for (const field of form.querySelectorAll(`[name=${input.name}]`)) {
-				field.removeAttribute("aria-invalid");
+		section.classList.add("vanishing");
+		releaseBats(area, () => {
+			showDone(present);
+			section.classList.remove("vanishing");
+			section.classList.add("arriving");
+		});
+	};
+
+	section.addEventListener("animationend", () => section.classList.remove("arriving"));
+
+	// Bringing something only makes sense for those who come
+	const bring = form.querySelector<HTMLElement>(".bring")!;
+	const updateBring = () => {
+		const notComing = form.querySelector<HTMLInputElement>("[name=present][value=no]")!.checked;
+
+		bring.hidden = notComing;
+		if (notComing) {
+			for (const box of bring.querySelectorAll<HTMLInputElement>("input")) {
+				box.checked = false;
 			}
+		}
+	};
+
+	form.addEventListener("change", updateBring);
+
+	form.addEventListener("input", (event) => {
+		const name = (event.target as HTMLInputElement).name as keyof Errors;
+
+		if (errors[name]) {
+			errors = { ...errors, [name]: undefined };
+			render();
 		}
 	});
 
 	form.addEventListener("submit", async (event) => {
 		event.preventDefault();
-		status.textContent = "";
+		if (sending) {
+			return;
+		}
+		failure = null;
 		const data = new FormData(form);
 		const result = validate(Object.fromEntries(data));
 
@@ -152,25 +259,27 @@ const movies = [
 			showErrors(result.errors);
 			return;
 		}
-		showErrors({});
-		button.disabled = true;
-		button.textContent = "Sealing…";
+		errors = {};
+		sending = true;
+		submit.disabled = true;
+		render();
 		try {
 			const response = await fetch(form.action, { method: "POST", body: data, headers: { Accept: "application/json" } });
 			const body = await response.json().catch(() => ({}));
 
 			if (response.ok) {
-				showDone(!!body.present);
+				vanish(!!body.present);
 			} else if (body.errors) {
 				showErrors(body.errors);
 			} else {
-				status.textContent = body.error ?? "Something went wrong. Try again.";
+				failure = body.error in TEXT[lang].errors ? body.error : "generic";
 			}
 		} catch {
-			status.textContent = "The keep could not be reached. Try again.";
+			failure = "network";
 		} finally {
-			button.disabled = false;
-			button.textContent = "Sign the register";
+			sending = false;
+			submit.disabled = false;
+			render();
 		}
 	});
 
@@ -180,27 +289,54 @@ const movies = [
 		form.querySelector<HTMLInputElement>("[name=name]")!.focus();
 	});
 
-	// Back from a submission made without JavaScript
-	const answer = new URLSearchParams(location.search).get("rsvp");
-
-	if (answer === "yes" || answer === "no") {
-		showDone(answer === "yes");
-	} else if (answer === "error") {
-		status.textContent = "Your answer could not be kept. Check the form and try again.";
+	for (const button of document.querySelectorAll<HTMLButtonElement>("[data-lang]")) {
+		button.addEventListener("click", () => {
+			lang = isLang(button.dataset.lang) ? button.dataset.lang : DEFAULT_LANG;
+			try {
+				localStorage.setItem("lang", lang);
+			} catch {
+				// Private windows may refuse: the choice just lasts until the page is left
+			}
+			render();
+		});
 	}
-	if (answer) {
+
+	try {
+		const saved = localStorage.getItem("lang");
+
+		if (isLang(saved)) {
+			lang = saved;
+		}
+	} catch {
+		// No storage: French, the default
+	}
+
+	// Back from a submission made without JavaScript
+	const returned = new URLSearchParams(location.search).get("rsvp");
+
+	if (returned === "yes" || returned === "no") {
+		showDone(returned === "yes");
+	} else if (returned === "error") {
+		failure = "noScript";
+	}
+	if (returned) {
 		history.replaceState(null, "", location.pathname);
 	}
+	updateBring();
+	render();
 </script>
 
 <style>
-	.rsvp {
+	.rsvp,
+	.lang {
 		--bone: #ded6ba;
 		--muted: #918b75;
 		--line: rgba(222, 214, 186, 0.2);
 		--amber: #cdab5e;
 		--rust: #d58a68;
+	}
 
+	.rsvp {
 		position: fixed;
 		z-index: 1;
 		top: 50%;
@@ -222,6 +358,28 @@ const movies = [
 		font: 17px/1.5 "EB Garamond", Georgia, serif;
 		scrollbar-width: thin;
 		scrollbar-color: var(--line) transparent;
+	}
+
+	/* Signed: the panel comes apart while the bats leave it... */
+	.rsvp.vanishing {
+		opacity: 0;
+		scale: 0.94;
+		pointer-events: none;
+		transition:
+			opacity 0.55s ease-in,
+			scale 0.55s ease-in;
+	}
+
+	/* ...and the answer settles in behind them */
+	.rsvp.arriving {
+		animation: arrive 0.9s ease-out;
+	}
+
+	@keyframes arrive {
+		from {
+			opacity: 0;
+			scale: 0.98;
+		}
 	}
 
 	.kicker {
@@ -300,6 +458,81 @@ const movies = [
 		margin-top: 4px;
 	}
 
+	.bring {
+		display: grid;
+		gap: 6px;
+		margin-top: -6px;
+	}
+
+	.bring[hidden] {
+		display: none;
+	}
+
+	.check {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 0;
+		color: #b9b29a;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.check input {
+		position: absolute;
+		opacity: 0;
+	}
+
+	/* A small box; ticked, it fills with candlelight */
+	.check span::before {
+		content: "";
+		flex: none;
+		display: inline-block;
+		width: 15px;
+		height: 15px;
+		margin-right: 10px;
+		vertical-align: -2px;
+		border: 1px solid rgba(222, 214, 186, 0.4);
+		transition:
+			background 0.2s,
+			border-color 0.2s,
+			box-shadow 0.2s;
+	}
+
+	.check:hover span::before {
+		border-color: var(--bone);
+	}
+
+	.check input:checked + span {
+		color: var(--bone);
+	}
+
+	.check input:checked + span::before {
+		border-color: var(--amber);
+		background: radial-gradient(circle, #e6c27a, var(--amber));
+		box-shadow: 0 0 10px rgba(205, 171, 94, 0.35);
+	}
+
+	/* The tick */
+	.check input:checked + span::after {
+		content: "";
+		position: absolute;
+		left: 5px;
+		top: 50%;
+		width: 4px;
+		height: 8px;
+		margin-top: -6px;
+		border: solid #1a1610;
+		border-width: 0 2px 2px 0;
+		transform: rotate(45deg);
+	}
+
+	.check input:focus-visible + span::before {
+		outline: 2px solid var(--amber);
+		outline-offset: 2px;
+	}
+
 	.choices {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -320,6 +553,8 @@ const movies = [
 
 	.choice span {
 		display: block;
+		height: 100%;
+		box-sizing: border-box;
 		padding: 9px 10px;
 		text-align: center;
 		color: #b9b29a;
@@ -357,10 +592,8 @@ const movies = [
 		font-size: 0.92rem;
 	}
 
-	button {
-		width: 100%;
-		margin-top: 6px;
-		padding: 12px 16px;
+	.submit,
+	.again {
 		color: var(--bone);
 		background: linear-gradient(#1c1a15, #0e0d0b);
 		border: 1px solid rgba(205, 171, 94, 0.55);
@@ -373,25 +606,97 @@ const movies = [
 			border-color 0.25s;
 	}
 
-	button:hover {
+	.submit {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 12px;
+		width: 100%;
+		margin-top: 6px;
+		padding: 10px 16px;
+	}
+
+	.submit:hover,
+	.again:hover {
 		border-color: var(--amber);
 		box-shadow: 0 0 26px rgba(205, 171, 94, 0.22);
 	}
 
-	button:focus-visible {
+	.submit:focus-visible,
+	.again:focus-visible {
 		outline: 2px solid var(--amber);
 		outline-offset: 3px;
 	}
 
-	button:disabled {
+	.submit:disabled {
 		cursor: wait;
 		opacity: 0.6;
 	}
 
 	.again {
 		margin-top: 18px;
-		width: auto;
+		padding: 10px 16px;
 		font-size: 0.9rem;
+	}
+
+	/* A carved pumpkin, lit from inside; it burns brighter when the button is near */
+	.pumpkin {
+		flex: none;
+		width: 26px;
+		height: 26px;
+		margin: -2px 0;
+		filter: drop-shadow(0 0 3px rgba(255, 160, 60, 0.25));
+		transition: filter 0.3s;
+	}
+
+	.pumpkin .stem {
+		fill: #4f4a28;
+	}
+
+	.pumpkin .rind {
+		fill: #96561b;
+	}
+
+	.pumpkin .rib {
+		fill: #a86423;
+		stroke: #5f3410;
+		stroke-width: 0.6;
+	}
+
+	.pumpkin .core {
+		fill: #b87029;
+		stroke: #5f3410;
+		stroke-width: 0.6;
+	}
+
+	.pumpkin .face {
+		fill: #ffcf73;
+		animation: candle 3.2s infinite;
+	}
+
+	.submit:hover .pumpkin,
+	.submit:focus-visible .pumpkin {
+		filter: drop-shadow(0 0 7px rgba(255, 170, 60, 0.6));
+	}
+
+	.submit:hover .pumpkin .face {
+		animation-duration: 0.9s;
+	}
+
+	@keyframes candle {
+		0%,
+		100% {
+			fill: #ffcf73;
+		}
+		40% {
+			fill: #f6b552;
+		}
+		55% {
+			fill: #ffe09a;
+		}
+		70% {
+			fill: #f0a948;
+		}
 	}
 
 	.status {
@@ -423,6 +728,54 @@ const movies = [
 		left: -9999px;
 	}
 
+	/* FR | EN, top right */
+	.lang {
+		position: fixed;
+		z-index: 3;
+		top: 16px;
+		right: 16px;
+		display: flex;
+		background: rgba(7, 7, 6, 0.6);
+		border: 1px solid var(--line);
+		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
+	}
+
+	.lang button {
+		padding: 7px 11px 6px;
+		color: var(--muted);
+		background: transparent;
+		border: 0;
+		font: 0.82rem/1 "EB Garamond", Georgia, serif;
+		letter-spacing: 0.18em;
+		cursor: pointer;
+		transition: color 0.2s;
+	}
+
+	.lang button + button {
+		border-left: 1px solid var(--line);
+	}
+
+	.lang button:hover {
+		color: var(--bone);
+	}
+
+	.lang button[aria-pressed="true"] {
+		color: var(--bone);
+		box-shadow: inset 0 -1px 0 var(--amber);
+	}
+
+	.lang button:focus-visible {
+		outline: 2px solid var(--amber);
+		outline-offset: 2px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.pumpkin .face {
+			animation: none;
+		}
+	}
+
 	/* Phones and narrow windows: the castle first, the invitation below it */
 	@media (max-width: 900px) {
 		.rsvp {
@@ -437,10 +790,24 @@ const movies = [
 			padding: 28px 22px 24px;
 		}
 
-		@media (min-width: 520px) {
-			.rsvp {
-				margin-inline: auto;
-			}
+		/* At the top of the page only, so it never floats over the form */
+		.lang {
+			position: absolute;
+		}
+
+		.choice span {
+			padding-inline: 6px;
+			font-size: 0.95rem;
+		}
+
+		.submit {
+			letter-spacing: 0.08em;
+		}
+	}
+
+	@media (max-width: 900px) and (min-width: 520px) {
+		.rsvp {
+			margin-inline: auto;
 		}
 	}
 </style>

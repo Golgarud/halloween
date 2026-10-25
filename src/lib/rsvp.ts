@@ -3,13 +3,15 @@
 // is letters, digits and ordinary punctuation. Anything else, markup and control or invisible
 // characters included, is refused, so nothing stored can ever be read as HTML or script.
 
-export const FIELDS = ["name", "present", "movie1", "movie2", "movie3"] as const;
+export const FIELDS = ["name", "present", "drink", "food", "movie1", "movie2", "movie3"] as const;
 /** Hidden from people, filled by bots */
 export const TRAP = "website";
 
 export type Field = (typeof FIELDS)[number];
-export type Rsvp = { name: string; present: boolean; movies: string[] };
-export type Errors = Partial<Record<Field, string>>;
+export type Rsvp = { name: string; present: boolean; drink: boolean; food: boolean; movies: string[] };
+/** Errors are codes; the page words them in the visitor's language (src/lib/i18n.ts) */
+export type ErrorCode = "nameLength" | "nameChars" | "nameFull" | "present" | "bring" | "movieLength" | "movieChars";
+export type Errors = Partial<Record<Field, ErrorCode>>;
 
 export const LIMITS = { name: { min: 2, max: 80 }, movie: { max: 100 } };
 
@@ -28,20 +30,26 @@ export const validate = (input: Record<string, unknown>): { ok: true; rsvp: Rsvp
 	const movies = (["movie1", "movie2", "movie3"] as const).map((field) => [field, tidy(input[field])] as const);
 
 	if (name.length < LIMITS.name.min || name.length > LIMITS.name.max) {
-		errors.name = `Your full name, ${LIMITS.name.min} to ${LIMITS.name.max} characters.`;
+		errors.name = "nameLength";
 	} else if (!NAME.test(name)) {
-		errors.name = "Letters only, with spaces, hyphens or apostrophes.";
+		errors.name = "nameChars";
 	} else if (!name.includes(" ")) {
-		errors.name = "Your full name: first and last.";
+		errors.name = "nameFull";
 	}
 	if (present !== "yes" && present !== "no") {
-		errors.present = "Tell us if you will come.";
+		errors.present = "present";
+	}
+	// Checkboxes: "yes" when ticked, absent otherwise
+	for (const field of ["drink", "food"] as const) {
+		if (input[field] !== undefined && input[field] !== "yes") {
+			errors[field] = "bring";
+		}
 	}
 	for (const [field, title] of movies) {
 		if (title.length > LIMITS.movie.max) {
-			errors[field] = `At most ${LIMITS.movie.max} characters.`;
+			errors[field] = "movieLength";
 		} else if (!MOVIE.test(title)) {
-			errors[field] = "Letters, digits and simple punctuation only.";
+			errors[field] = "movieChars";
 		}
 	}
 
@@ -50,6 +58,13 @@ export const validate = (input: Record<string, unknown>): { ok: true; rsvp: Rsvp
 	}
 	return {
 		ok: true,
-		rsvp: { name, present: present === "yes", movies: movies.map(([, title]) => title).filter(Boolean) },
+		rsvp: {
+			name,
+			present: present === "yes",
+			// Only those who come bring anything
+			drink: present === "yes" && input.drink === "yes",
+			food: present === "yes" && input.food === "yes",
+			movies: movies.map(([, title]) => title).filter(Boolean),
+		},
 	};
 };

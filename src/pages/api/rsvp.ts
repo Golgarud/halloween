@@ -1,6 +1,7 @@
 // Receives the form. Astro has already refused cross-site posts (security.checkOrigin); this checks
 // the size, the fields, and every value (src/lib/rsvp.ts) before anything is written.
 // The page's script asks for JSON; without JavaScript, the browser is sent back to the page.
+// Errors go back as codes, which the page words in the visitor's language.
 import type { APIRoute } from "astro";
 import { FIELDS, TRAP, validate } from "../../lib/rsvp";
 import { saveResponse } from "../../lib/store";
@@ -30,10 +31,10 @@ export const POST: APIRoute = async ({ request, clientAddress, redirect }) => {
 			: redirect(`/?rsvp=${status === 200 ? (body.present ? "yes" : "no") : "error"}#rsvp`, 303);
 
 	if (Number(request.headers.get("content-length") ?? 0) > MAX_BYTES) {
-		return reply(413, { error: "Too long." });
+		return reply(413, { error: "tooLong" });
 	}
 	if (tooMany(clientAddress)) {
-		return reply(429, { error: "Too many answers. Try again later." });
+		return reply(429, { error: "tooMany" });
 	}
 	let form: FormData;
 
@@ -42,11 +43,11 @@ export const POST: APIRoute = async ({ request, clientAddress, redirect }) => {
 		const body = await request.arrayBuffer();
 
 		if (body.byteLength > MAX_BYTES) {
-			return reply(413, { error: "Too long." });
+			return reply(413, { error: "tooLong" });
 		}
 		form = await new Response(body, { headers: { "content-type": request.headers.get("content-type") ?? "" } }).formData();
 	} catch {
-		return reply(400, { error: "The form could not be read." });
+		return reply(400, { error: "unreadable" });
 	}
 	const input: Record<string, unknown> = {};
 
@@ -60,7 +61,7 @@ export const POST: APIRoute = async ({ request, clientAddress, redirect }) => {
 		}
 		// Only the expected text fields, each once
 		if (!(FIELDS as readonly string[]).includes(key) || typeof value !== "string" || key in input) {
-			return reply(400, { error: "Unexpected field." });
+			return reply(400, { error: "unexpected" });
 		}
 		input[key] = value;
 	}

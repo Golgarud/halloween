@@ -10,6 +10,8 @@ export default defineConfig({
 		schema: {
 			// The hidden address of the responses: /<HALLOWEEN_SECRET>/ (no secret, no page)
 			HALLOWEEN_SECRET: envField.string({ context: "server", access: "secret", optional: true }),
+			// And the password asked there (no password, no page either)
+			HALLOWEEN_PASSWORD: envField.string({ context: "server", access: "secret", optional: true }),
 			// Where the responses are kept, outside anything that is served
 			HALLOWEEN_DATA: envField.string({ context: "server", access: "secret", default: "data/responses.json" }),
 		},

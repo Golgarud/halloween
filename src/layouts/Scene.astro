@@ -5,12 +5,13 @@ interface Props {
 	description: string;
 	/** Let the page scroll over the fixed illustration (for content below it on phones) */
 	scroll?: boolean;
+	lang?: string;
 }
 
-const { title, description, scroll = false } = Astro.props;
+const { title, description, scroll = false, lang = "en" } = Astro.props;
 ---
 
-<html lang="en">
+<html lang={lang}>
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />

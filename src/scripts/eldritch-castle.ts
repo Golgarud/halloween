@@ -1432,6 +1432,9 @@ export const mountEldritchCastle = (canvas: HTMLCanvasElement) => {
 		scale = Math.max(width / W, height / H);
 		offsetX = clamp(width / 2 - 850 * scale, width - W * scale, 0);
 		offsetY = clamp(height / 2 - 330 * scale, height - H * scale, 0);
+		// Where the moon is on the page, for whatever wants to fly to it (src/scripts/bats.ts)
+		canvas.dataset.moonX = String(Math.round((offsetX + MOON.x * scale) / ratio + box.left));
+		canvas.dataset.moonY = String(Math.round((offsetY + MOON.y * scale) / ratio + box.top));
 
 		const paint = (painter: (lc: Ctx, scene: () => void) => void) => {
 			const canvas = layer(width, height);

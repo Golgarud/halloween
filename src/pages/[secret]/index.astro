@@ -1,12 +1,15 @@
 ---
-// The register of answers, at /<HALLOWEEN_SECRET>/. Everything shown is escaped by Astro on top of
-// having been validated on the way in, and the page loads nothing from anywhere else.
-import { isSecret, notFound, PRIVATE_HEADERS } from "../../lib/secret";
+// The register of answers, at /<HALLOWEEN_SECRET>/, behind HALLOWEEN_PASSWORD (src/lib/secret.ts).
+// Everything shown is escaped by Astro on top of having been validated on the way in, and the page
+// loads nothing from anywhere else. Signing in and out are posts to this same page.
+import { checkPassword, isLockedOut, isSecret, isSignedIn, notFound, PRIVATE_HEADERS, signIn, signOut } from "../../lib/secret";
 import { readResponses } from "../../lib/store";
 
 export const prerender = false;
 
-if (!isSecret(Astro.params.secret)) {
+const { secret } = Astro.params;
+
+if (!isSecret(secret)) {
 	return notFound();
 }
 for (const [name, value] of Object.entries(PRIVATE_HEADERS)) {
@@ -15,12 +18,38 @@ for (const [name, value] of Object.entries(PRIVATE_HEADERS)) {
 if (import.meta.env.PROD) {
 	Astro.response.headers.set(
 		"Content-Security-Policy",
-		"default-src 'none'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+		"default-src 'none'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
 	);
 }
 
-const responses = (await readResponses()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+let refused: "wrong" | "locked" | null = null;
+
+if (Astro.request.method === "POST") {
+	const form = await Astro.request.formData().catch(() => null);
+
+	if (form?.get("action") === "out") {
+		signOut(Astro.cookies, secret!);
+		return Astro.redirect(Astro.url.pathname, 303);
+	}
+	if (isLockedOut(Astro.clientAddress)) {
+		refused = "locked";
+	} else if (checkPassword(Astro.clientAddress, form?.get("password"))) {
+		signIn(Astro.cookies, secret!);
+		return Astro.redirect(Astro.url.pathname, 303);
+	} else {
+		refused = isLockedOut(Astro.clientAddress) ? "locked" : "wrong";
+	}
+}
+const signedIn = isSignedIn(Astro.cookies);
+
+if (!signedIn) {
+	Astro.response.status = refused ? 401 : 200;
+}
+
+const responses = signedIn ? (await readResponses()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) : [];
 const coming = responses.filter((response) => response.present);
+const drinks = coming.filter((response) => response.drink).length;
+const food = coming.filter((response) => response.food).length;
 const date = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
 // Films, counted however people spelled them
@@ -45,69 +74,94 @@ const ranking = [...films.values()].sort((a, b) => b.count - a.count || a.title.
 		<title>The register</title>
 	</head>
 	<body>
-		<main>
-			<header>
-				<h1>The register</h1>
-				<p>
-					{responses.length} answers · <strong>{coming.length} coming</strong> · {responses.length - coming.length} not
-					coming · <a href={`/${Astro.params.secret}/responses.json`}>raw JSON</a>
-				</p>
-			</header>
+		{
+			signedIn ? (
+				<main>
+					<header>
+						<div class="title">
+							<h1>The register</h1>
+							<form method="post">
+								<input type="hidden" name="action" value="out" />
+								<button type="submit" class="link">Sign out</button>
+							</form>
+						</div>
+						<p>
+							{responses.length} answers · <strong>{coming.length} coming</strong> · {responses.length - coming.length} not
+							coming · {drinks} bringing drinks · {food} bringing food · <a href={`/${secret}/responses.json`}>raw JSON</a>
+						</p>
+					</header>
 
-			{
-				responses.length === 0 ? (
-					<p class="empty">No one has answered yet.</p>
-				) : (
-					<table>
-						<thead>
-							<tr>
-								<th scope="col">Name</th>
-								<th scope="col">Coming</th>
-								<th scope="col">Films</th>
-								<th scope="col">Answered</th>
-							</tr>
-						</thead>
-						<tbody>
-							{responses.map((response) => (
+					{responses.length === 0 ? (
+						<p class="empty">No one has answered yet.</p>
+					) : (
+						<table>
+							<thead>
 								<tr>
-									<td>{response.name}</td>
-									<td class={response.present ? "yes" : "no"}>{response.present ? "Yes" : "No"}</td>
-									<td>
-										{response.movies.length ? (
-											<ol>
-												{response.movies.map((title) => (
-													<li>{title}</li>
-												))}
-											</ol>
-										) : (
-											<span class="none">—</span>
-										)}
-									</td>
-									<td class="when">
-										<time datetime={response.updatedAt}>{date.format(new Date(response.updatedAt))}</time>
-									</td>
+									<th scope="col">Name</th>
+									<th scope="col">Coming</th>
+									<th scope="col">Brings</th>
+									<th scope="col">Film ideas</th>
+									<th scope="col">Answered</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
-				)
-			}
+							</thead>
+							<tbody>
+								{responses.map((response) => (
+									<tr>
+										<td>{response.name}</td>
+										<td class={response.present ? "yes" : "no"}>{response.present ? "Yes" : "No"}</td>
+										<td>
+											{response.drink || response.food ? (
+												[response.drink && "Drink", response.food && "Food"].filter(Boolean).join(" · ")
+											) : (
+												<span class="none">—</span>
+											)}
+										</td>
+										<td>
+											{response.movies.length ? (
+												<ol>
+													{response.movies.map((title) => (
+														<li>{title}</li>
+													))}
+												</ol>
+											) : (
+												<span class="none">—</span>
+											)}
+										</td>
+										<td class="when">
+											<time datetime={response.updatedAt}>{date.format(new Date(response.updatedAt))}</time>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
 
-			{
-				ranking.length > 0 && (
-					<section>
-						<h2>Films suggested</h2>
-						<ol class="ranking">
-							{ranking.map((film) => (
-								<li>
-									{film.title} <span class="count">× {film.count}</span>
-								</li>
-							))}
-						</ol>
-					</section>
-				)
-			}
-		</main>
+					{ranking.length > 0 && (
+						<section>
+							<h2>Film ideas, for the vote</h2>
+							<ol class="ranking">
+								{ranking.map((film) => (
+									<li>
+										{film.title} <span class="count">× {film.count}</span>
+									</li>
+								))}
+							</ol>
+						</section>
+					)}
+				</main>
+			) : (
+				<main class="gate">
+					<form method="post">
+						<h1>The register</h1>
+						<label for="password">Password</label>
+						<input id="password" name="password" type="password" autocomplete="current-password" required autofocus />
+						{refused === "wrong" && <p class="refused">Wrong password.</p>}
+						{refused === "locked" && <p class="refused">Too many attempts. Try again in a quarter of an hour.</p>}
+						<button type="submit">Open</button>
+					</form>
+				</main>
+			)
+		}
 	</body>
 </html>
 
@@ -206,6 +260,76 @@ const ranking = [...films.values()].sort((a, b) => b.count - a.count || a.title.
 
 	section {
 		margin-top: 40px;
+	}
+
+	.title {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	button {
+		color: var(--text);
+		background: #1a1916;
+		border: 1px solid var(--line);
+		padding: 8px 16px;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	button:hover {
+		border-color: var(--yes);
+	}
+
+	button:focus-visible,
+	input:focus-visible {
+		outline: 2px solid var(--yes);
+		outline-offset: 2px;
+	}
+
+	.link {
+		color: var(--muted);
+		background: none;
+		border: 0;
+		padding: 0;
+		text-decoration: underline;
+	}
+
+	.link:hover {
+		color: var(--text);
+	}
+
+	/* Signed out: a small door */
+	.gate {
+		display: grid;
+		place-items: center;
+		min-height: 100vh;
+		box-sizing: border-box;
+		padding: 16px;
+	}
+
+	.gate form {
+		display: grid;
+		gap: 10px;
+		width: min(320px, 100%);
+	}
+
+	.gate label {
+		color: var(--muted);
+	}
+
+	.gate input {
+		padding: 9px 10px;
+		color: var(--text);
+		background: var(--panel);
+		border: 1px solid var(--line);
+		font: inherit;
+	}
+
+	.refused {
+		margin: 0;
+		color: #d58a68;
 	}
 
 	.ranking {

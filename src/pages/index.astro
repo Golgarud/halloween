@@ -1,10 +1,16 @@
 ---
 import EldritchCastle from "../components/EldritchCastle.astro";
 import RsvpForm from "../components/RsvpForm.astro";
+import { DEFAULT_LANG } from "../lib/i18n";
 import Scene from "../layouts/Scene.astro";
 ---
 
-<Scene title="The Drowned Keep" description="You are summoned: tell us if you will come, and which films we should watch in the dark." scroll>
+<Scene
+	title="The Drowned Keep"
+	description="Petite soirée Halloween, le 31/10/26 à 19h : movie night, un ou deux films d'horreur. Dis-nous si tu viens."
+	lang={DEFAULT_LANG}
+	scroll
+>
 	<Fragment slot="head">
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
