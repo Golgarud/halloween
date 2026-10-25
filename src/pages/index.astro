@@ -1,8 +1,18 @@
 ---
 import EldritchCastle from "../components/EldritchCastle.astro";
+import RsvpForm from "../components/RsvpForm.astro";
 import Scene from "../layouts/Scene.astro";
 ---
 
-<Scene title="The Drowned Keep" description="A gothic castle on a crag, under a sick moon, wrapped by things from below.">
+<Scene title="The Drowned Keep" description="You are summoned: tell us if you will come, and which films we should watch in the dark." scroll>
+	<Fragment slot="head">
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=IM+Fell+English&display=swap"
+		/>
+	</Fragment>
 	<EldritchCastle />
+	<RsvpForm />
 </Scene>

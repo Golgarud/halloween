@@ -1,43 +1,40 @@
-# Astro Starter Kit: Minimal
+# The Drowned Keep
+
+A Halloween invitation: a painted, animated Lovecraftian castle with a form to answer it (full name,
+coming or not, three films). The first, storybook take on the illustration is kept at `/cartoon/`.
+
+## Running it
 
 ```sh
-bun create astro@latest -- --template minimal
+bun install
+cp .env.example .env   # then set HALLOWEEN_SECRET to something long and random
+bun run dev            # http://localhost:4321
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+In production: `bun run build`, then `bun run start` (Node, which loads `.env`). Put it behind a
+reverse proxy that forwards the `Host` header; `PORT` and `HOST` set where it listens.
 
-## 🚀 Project Structure
+## The answers
 
-Inside of your Astro project, you'll see the following folders and files:
+- Stored in `data/responses.json` (or `HALLOWEEN_DATA`), which is never served and not in git.
+- Readable only at `/<HALLOWEEN_SECRET>/` (a table) and `/<HALLOWEEN_SECRET>/responses.json` (raw).
+  Any other address there is a plain 404; without a secret of 16+ characters the page stays closed.
+- Answering again with the same full name replaces the earlier answer.
 
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
+Every value is checked against an allow-list, in the browser and again on the server
+(`src/lib/rsvp.ts`): markup, control and invisible characters are refused. Astro escapes everything
+the register shows, and that page sends a strict Content-Security-Policy. The endpoint also refuses
+cross-site posts, bodies over 4 KB, unexpected fields, filled bot traps, and more than 20 answers per
+address in ten minutes.
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## Where things are
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
-
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `bun install`             | Installs dependencies                            |
-| `bun dev`             | Starts local dev server at `localhost:4321`      |
-| `bun build`           | Build your production site to `./dist/`          |
-| `bun preview`         | Preview your build locally, before deploying     |
-| `bun astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `bun astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+| Path | What |
+| --- | --- |
+| `src/scripts/eldritch-castle.ts` | The illustration, painted on a canvas |
+| `src/scripts/cartoon-castle.ts` | The storybook version (`/cartoon/`) |
+| `src/components/RsvpForm.astro` | The form |
+| `src/lib/rsvp.ts` | Validation, shared by the form and the server |
+| `src/lib/store.ts` | Reading and writing the answers |
+| `src/pages/api/rsvp.ts` | Where the form posts |
+| `src/pages/[secret]/` | The hidden register |

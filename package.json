@@ -8,10 +8,12 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "start": "node --env-file=.env dist/server/entry.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/node": "^11.1.9",
     "astro": "^7.4.2"
   }
 }

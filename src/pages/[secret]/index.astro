@@ -1,0 +1,239 @@
+---
+// The register of answers, at /<HALLOWEEN_SECRET>/. Everything shown is escaped by Astro on top of
+// having been validated on the way in, and the page loads nothing from anywhere else.
+import { isSecret, notFound, PRIVATE_HEADERS } from "../../lib/secret";
+import { readResponses } from "../../lib/store";
+
+export const prerender = false;
+
+if (!isSecret(Astro.params.secret)) {
+	return notFound();
+}
+for (const [name, value] of Object.entries(PRIVATE_HEADERS)) {
+	Astro.response.headers.set(name, value);
+}
+if (import.meta.env.PROD) {
+	Astro.response.headers.set(
+		"Content-Security-Policy",
+		"default-src 'none'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+	);
+}
+
+const responses = (await readResponses()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+const coming = responses.filter((response) => response.present);
+const date = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
+
+// Films, counted however people spelled them
+const films = new Map<string, { title: string; count: number }>();
+
+for (const title of responses.flatMap((response) => response.movies)) {
+	const key = title.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+	const film = films.get(key) ?? { title, count: 0 };
+
+	film.count++;
+	films.set(key, film);
+}
+const ranking = [...films.values()].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title));
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex, nofollow" />
+		<meta name="referrer" content="no-referrer" />
+		<title>The register</title>
+	</head>
+	<body>
+		<main>
+			<header>
+				<h1>The register</h1>
+				<p>
+					{responses.length} answers · <strong>{coming.length} coming</strong> · {responses.length - coming.length} not
+					coming · <a href={`/${Astro.params.secret}/responses.json`}>raw JSON</a>
+				</p>
+			</header>
+
+			{
+				responses.length === 0 ? (
+					<p class="empty">No one has answered yet.</p>
+				) : (
+					<table>
+						<thead>
+							<tr>
+								<th scope="col">Name</th>
+								<th scope="col">Coming</th>
+								<th scope="col">Films</th>
+								<th scope="col">Answered</th>
+							</tr>
+						</thead>
+						<tbody>
+							{responses.map((response) => (
+								<tr>
+									<td>{response.name}</td>
+									<td class={response.present ? "yes" : "no"}>{response.present ? "Yes" : "No"}</td>
+									<td>
+										{response.movies.length ? (
+											<ol>
+												{response.movies.map((title) => (
+													<li>{title}</li>
+												))}
+											</ol>
+										) : (
+											<span class="none">—</span>
+										)}
+									</td>
+									<td class="when">
+										<time datetime={response.updatedAt}>{date.format(new Date(response.updatedAt))}</time>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				)
+			}
+
+			{
+				ranking.length > 0 && (
+					<section>
+						<h2>Films suggested</h2>
+						<ol class="ranking">
+							{ranking.map((film) => (
+								<li>
+									{film.title} <span class="count">× {film.count}</span>
+								</li>
+							))}
+						</ol>
+					</section>
+				)
+			}
+		</main>
+	</body>
+</html>
+
+<style>
+	:root {
+		color-scheme: dark;
+		--bg: #0b0b0a;
+		--panel: #141412;
+		--line: #2a2925;
+		--text: #ddd6bd;
+		--muted: #8f8a76;
+		--yes: #c9b26e;
+	}
+
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--text);
+		font: 16px/1.5 Georgia, "Times New Roman", serif;
+	}
+
+	main {
+		max-width: 1000px;
+		margin: 0 auto;
+		padding: 40px 16px 64px;
+	}
+
+	h1,
+	h2 {
+		font-weight: normal;
+		letter-spacing: 0.04em;
+		margin: 0 0 8px;
+	}
+
+	h1 {
+		font-size: 2rem;
+	}
+
+	header p {
+		color: var(--muted);
+		margin: 0 0 32px;
+	}
+
+	header strong {
+		color: var(--yes);
+		font-weight: normal;
+	}
+
+	a {
+		color: var(--text);
+	}
+
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		background: var(--panel);
+	}
+
+	th,
+	td {
+		text-align: left;
+		vertical-align: top;
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--line);
+	}
+
+	th {
+		color: var(--muted);
+		font-weight: normal;
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+
+	td ol {
+		margin: 0;
+		padding-left: 1.2em;
+	}
+
+	.yes {
+		color: var(--yes);
+	}
+
+	.no,
+	.none,
+	.when,
+	.empty,
+	.count {
+		color: var(--muted);
+	}
+
+	.when {
+		white-space: nowrap;
+		font-size: 0.9rem;
+	}
+
+	section {
+		margin-top: 40px;
+	}
+
+	.ranking {
+		padding-left: 1.4em;
+	}
+
+	@media (max-width: 640px) {
+		table,
+		thead,
+		tbody,
+		tr,
+		th,
+		td {
+			display: block;
+		}
+
+		thead {
+			display: none;
+		}
+
+		tr {
+			padding: 8px 0;
+			border-bottom: 1px solid var(--line);
+		}
+
+		td {
+			border: 0;
+			padding: 2px 12px;
+		}
+	}
+</style>

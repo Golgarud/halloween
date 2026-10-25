@@ -3,9 +3,11 @@
 interface Props {
 	title: string;
 	description: string;
+	/** Let the page scroll over the fixed illustration (for content below it on phones) */
+	scroll?: boolean;
 }
 
-const { title, description } = Astro.props;
+const { title, description, scroll = false } = Astro.props;
 ---
 
 <html lang="en">
@@ -17,8 +19,9 @@ const { title, description } = Astro.props;
 		<meta name="generator" content={Astro.generator} />
 		<meta name="description" content={description} />
 		<title>{title}</title>
+		<slot name="head" />
 	</head>
-	<body>
+	<body class:list={{ scroll }}>
 		<slot />
 	</body>
 </html>
@@ -29,6 +32,9 @@ const { title, description } = Astro.props;
 		height: 100%;
 		margin: 0;
 		background: #050606;
+	}
+
+	body:not(.scroll) {
 		overflow: hidden;
 	}
 </style>

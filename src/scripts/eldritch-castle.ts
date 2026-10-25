@@ -1422,6 +1422,10 @@ export const mountEldritchCastle = (canvas: HTMLCanvasElement) => {
 		const width = Math.max(1, Math.round(box.width * ratio));
 		const height = Math.max(1, Math.round(box.height * ratio));
 
+		// Repainting costs a moment: skip it when the size has not really changed
+		if (layers && width === canvas.width && height === canvas.height) {
+			return;
+		}
 		canvas.width = width;
 		canvas.height = height;
 		// Cover the screen, cropping around the castle and the moon rather than the middle

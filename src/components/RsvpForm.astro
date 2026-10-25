@@ -1,0 +1,446 @@
+---
+// The invitation: full name, coming or not, three films. Posts to /api/rsvp, which validates again
+// with the same rules (src/lib/rsvp.ts) and keeps the answer; works without JavaScript too.
+import { LIMITS, TRAP } from "../lib/rsvp";
+
+const movies = [
+	["movie1", "First film"],
+	["movie2", "Second film"],
+	["movie3", "Third film"],
+] as const;
+---
+
+<section class="rsvp" id="rsvp" aria-labelledby="rsvp-title">
+	<form method="post" action="/api/rsvp" novalidate>
+		<p class="kicker">All Hallows' Eve</p>
+		<h1 id="rsvp-title">You are summoned</h1>
+		<p class="lede">The keep opens its doors for one night. Tell us if you will come, and which films we should watch in the dark.</p>
+
+		<div class="field">
+			<label for="rsvp-name">Full name</label>
+			<input
+				id="rsvp-name"
+				name="name"
+				type="text"
+				autocomplete="name"
+				required
+				minlength={LIMITS.name.min}
+				maxlength={LIMITS.name.max}
+				aria-describedby="name-error"
+			/>
+			<p class="error" id="name-error" hidden></p>
+		</div>
+
+		<fieldset class="field" aria-describedby="present-error">
+			<legend>Will you be there?</legend>
+			<div class="choices">
+				<label class="choice">
+					<input type="radio" name="present" value="yes" required />
+					<span>Yes, I will come</span>
+				</label>
+				<label class="choice">
+					<input type="radio" name="present" value="no" />
+					<span>No, I cannot</span>
+				</label>
+			</div>
+			<p class="error" id="present-error" hidden></p>
+		</fieldset>
+
+		<fieldset class="field">
+			<legend>Three films for the night</legend>
+			<p class="hint">Optional. Whatever should haunt the screen.</p>
+			{
+				movies.map(([name, label]) => (
+					<div class="film">
+						<label class="visually-hidden" for={`rsvp-${name}`}>
+							{label}
+						</label>
+						<input
+							id={`rsvp-${name}`}
+							name={name}
+							type="text"
+							placeholder={label}
+							autocomplete="off"
+							maxlength={LIMITS.movie.max}
+							aria-describedby={`${name}-error`}
+						/>
+						<p class="error" id={`${name}-error`} hidden />
+					</div>
+				))
+			}
+		</fieldset>
+
+		<!-- Left empty by people, filled by bots -->
+		<div class="trap" aria-hidden="true">
+			<label for="rsvp-trap">Leave this empty</label>
+			<input id="rsvp-trap" name={TRAP} type="text" tabindex="-1" autocomplete="off" />
+		</div>
+
+		<button type="submit">Sign the register</button>
+		<p class="status" role="status" aria-live="polite"></p>
+	</form>
+
+	<div class="done" hidden tabindex="-1">
+		<p class="kicker">Your answer is kept</p>
+		<h2 class="done-title"></h2>
+		<p class="done-text"></p>
+		<button type="button" class="again">Change my answer</button>
+	</div>
+</section>
+
+<script>
+	import { FIELDS, validate, type Errors } from "../lib/rsvp";
+
+	const section = document.querySelector<HTMLElement>("#rsvp")!;
+	const form = section.querySelector("form")!;
+	const done = section.querySelector<HTMLElement>(".done")!;
+	const status = form.querySelector<HTMLElement>(".status")!;
+	const button = form.querySelector<HTMLButtonElement>("button[type=submit]")!;
+
+	const DONE = {
+		yes: ["The keep will be waiting", "Your name is in the register. Come when the moon is up."],
+		no: ["So be it", "The keep will remember you. You can still change your mind."],
+	};
+
+	const showErrors = (errors: Errors) => {
+		for (const field of FIELDS) {
+			const message = errors[field];
+			const error = form.querySelector<HTMLElement>(`#${field}-error`)!;
+
+			error.textContent = message ?? "";
+			error.hidden = !message;
+			for (const input of form.querySelectorAll<HTMLInputElement>(`[name=${field}]`)) {
+				input.toggleAttribute("aria-invalid", !!message);
+			}
+		}
+		const first = FIELDS.find((field) => errors[field]);
+
+		if (first) {
+			form.querySelector<HTMLInputElement>(`[name=${first}]`)?.focus();
+		}
+	};
+
+	const showDone = (present: boolean) => {
+		const [title, text] = DONE[present ? "yes" : "no"];
+
+		done.querySelector(".done-title")!.textContent = title;
+		done.querySelector(".done-text")!.textContent = text;
+		form.hidden = true;
+		done.hidden = false;
+		done.focus();
+	};
+
+	form.addEventListener("input", (event) => {
+		const input = event.target as HTMLInputElement;
+		const error = form.querySelector<HTMLElement>(`#${input.name}-error`);
+
+		if (error && !error.hidden) {
+			error.hidden = true;
+			for (const field of form.querySelectorAll(`[name=${input.name}]`)) {
+				field.removeAttribute("aria-invalid");
+			}
+		}
+	});
+
+	form.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		status.textContent = "";
+		const data = new FormData(form);
+		const result = validate(Object.fromEntries(data));
+
+		if (!result.ok) {
+			showErrors(result.errors);
+			return;
+		}
+		showErrors({});
+		button.disabled = true;
+		button.textContent = "Sealing…";
+		try {
+			const response = await fetch(form.action, { method: "POST", body: data, headers: { Accept: "application/json" } });
+			const body = await response.json().catch(() => ({}));
+
+			if (response.ok) {
+				showDone(!!body.present);
+			} else if (body.errors) {
+				showErrors(body.errors);
+			} else {
+				status.textContent = body.error ?? "Something went wrong. Try again.";
+			}
+		} catch {
+			status.textContent = "The keep could not be reached. Try again.";
+		} finally {
+			button.disabled = false;
+			button.textContent = "Sign the register";
+		}
+	});
+
+	done.querySelector(".again")!.addEventListener("click", () => {
+		done.hidden = true;
+		form.hidden = false;
+		form.querySelector<HTMLInputElement>("[name=name]")!.focus();
+	});
+
+	// Back from a submission made without JavaScript
+	const answer = new URLSearchParams(location.search).get("rsvp");
+
+	if (answer === "yes" || answer === "no") {
+		showDone(answer === "yes");
+	} else if (answer === "error") {
+		status.textContent = "Your answer could not be kept. Check the form and try again.";
+	}
+	if (answer) {
+		history.replaceState(null, "", location.pathname);
+	}
+</script>
+
+<style>
+	.rsvp {
+		--bone: #ded6ba;
+		--muted: #918b75;
+		--line: rgba(222, 214, 186, 0.2);
+		--amber: #cdab5e;
+		--rust: #d58a68;
+
+		position: fixed;
+		z-index: 1;
+		top: 50%;
+		left: clamp(16px, 3.5vw, 64px);
+		transform: translateY(-50%);
+		box-sizing: border-box;
+		width: min(390px, 31vw);
+		max-height: calc(100dvh - 48px);
+		overflow: auto;
+		padding: 32px 30px 28px;
+		color: var(--bone);
+		background: rgba(7, 7, 6, 0.72);
+		border: 1px solid var(--line);
+		box-shadow:
+			0 30px 80px rgba(0, 0, 0, 0.6),
+			inset 0 1px 0 rgba(222, 214, 186, 0.06);
+		backdrop-filter: blur(8px) saturate(0.7);
+		-webkit-backdrop-filter: blur(8px) saturate(0.7);
+		font: 17px/1.5 "EB Garamond", Georgia, serif;
+		scrollbar-width: thin;
+		scrollbar-color: var(--line) transparent;
+	}
+
+	.kicker {
+		margin: 0 0 6px;
+		color: var(--muted);
+		font-size: 0.78rem;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+	}
+
+	h1,
+	h2 {
+		margin: 0 0 10px;
+		font: 400 2.1rem/1.1 "IM Fell English", Georgia, serif;
+		letter-spacing: 0.01em;
+	}
+
+	.lede {
+		margin: 0 0 24px;
+		color: #b9b29a;
+	}
+
+	.field {
+		margin: 0 0 20px;
+		padding: 0;
+		border: 0;
+		min-width: 0;
+	}
+
+	label,
+	legend {
+		display: block;
+		margin-bottom: 6px;
+		padding: 0;
+		font: 1.08rem "IM Fell English", Georgia, serif;
+	}
+
+	.hint {
+		margin: -4px 0 8px;
+		color: var(--muted);
+		font-size: 0.92rem;
+		font-style: italic;
+	}
+
+	input[type="text"] {
+		box-sizing: border-box;
+		width: 100%;
+		padding: 9px 2px 7px;
+		color: var(--bone);
+		background: transparent;
+		border: 0;
+		border-bottom: 1px solid var(--line);
+		border-radius: 0;
+		font: inherit;
+		transition:
+			border-color 0.2s,
+			box-shadow 0.2s;
+	}
+
+	input[type="text"]::placeholder {
+		color: #6d685a;
+		font-style: italic;
+	}
+
+	input[type="text"]:focus {
+		outline: none;
+		border-bottom-color: var(--amber);
+		box-shadow: 0 6px 12px -10px var(--amber);
+	}
+
+	input[aria-invalid] {
+		border-bottom-color: var(--rust);
+	}
+
+	.film + .film {
+		margin-top: 4px;
+	}
+
+	.choices {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+
+	.choice {
+		position: relative;
+		margin: 0;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.choice input {
+		position: absolute;
+		opacity: 0;
+	}
+
+	.choice span {
+		display: block;
+		padding: 9px 10px;
+		text-align: center;
+		color: #b9b29a;
+		border: 1px solid var(--line);
+		transition:
+			border-color 0.2s,
+			color 0.2s,
+			box-shadow 0.2s;
+	}
+
+	.choice:hover span {
+		border-color: rgba(222, 214, 186, 0.4);
+	}
+
+	.choice input:checked + span {
+		color: var(--bone);
+		border-color: var(--amber);
+		box-shadow:
+			inset 0 0 18px rgba(205, 171, 94, 0.14),
+			0 0 18px rgba(205, 171, 94, 0.12);
+	}
+
+	.choice input:focus-visible + span {
+		outline: 2px solid var(--amber);
+		outline-offset: 2px;
+	}
+
+	.choice input[aria-invalid] + span {
+		border-color: var(--rust);
+	}
+
+	.error {
+		margin: 6px 0 0;
+		color: var(--rust);
+		font-size: 0.92rem;
+	}
+
+	button {
+		width: 100%;
+		margin-top: 6px;
+		padding: 12px 16px;
+		color: var(--bone);
+		background: linear-gradient(#1c1a15, #0e0d0b);
+		border: 1px solid rgba(205, 171, 94, 0.55);
+		font: 1.05rem "IM Fell English", Georgia, serif;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition:
+			box-shadow 0.25s,
+			border-color 0.25s;
+	}
+
+	button:hover {
+		border-color: var(--amber);
+		box-shadow: 0 0 26px rgba(205, 171, 94, 0.22);
+	}
+
+	button:focus-visible {
+		outline: 2px solid var(--amber);
+		outline-offset: 3px;
+	}
+
+	button:disabled {
+		cursor: wait;
+		opacity: 0.6;
+	}
+
+	.again {
+		margin-top: 18px;
+		width: auto;
+		font-size: 0.9rem;
+	}
+
+	.status {
+		min-height: 1.5em;
+		margin: 10px 0 0;
+		color: var(--rust);
+		font-size: 0.92rem;
+	}
+
+	.done:focus {
+		outline: none;
+	}
+
+	.done-text {
+		color: #b9b29a;
+	}
+
+	.trap,
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	.trap {
+		left: -9999px;
+	}
+
+	/* Phones and narrow windows: the castle first, the invitation below it */
+	@media (max-width: 900px) {
+		.rsvp {
+			position: relative;
+			top: auto;
+			left: auto;
+			transform: none;
+			width: auto;
+			max-width: 480px;
+			max-height: none;
+			margin: 62svh 16px 32px;
+			padding: 28px 22px 24px;
+		}
+
+		@media (min-width: 520px) {
+			.rsvp {
+				margin-inline: auto;
+			}
+		}
+	}
+</style>
